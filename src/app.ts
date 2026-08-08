@@ -9,4 +9,11 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Hello Production v2 - CI/CD Working");
 });
 
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "my-api",
+  });
+});
+
 export default app;
