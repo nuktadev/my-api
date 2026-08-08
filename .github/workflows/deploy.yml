@@ -1,4 +1,4 @@
-name: Deploy to DigitalOcean
+name: CI/CD
 
 on:
   push:
@@ -6,12 +6,39 @@ on:
       - main
 
 jobs:
-  deploy:
-    name: Deploy API
+  # ==========================
+  # CI
+  # ==========================
+  ci:
+    name: Build Application
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to DigitalOcean
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+  # ==========================
+  # CD
+  # ==========================
+  deploy:
+    name: Deploy to DigitalOcean
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.HOST }}
@@ -22,17 +49,21 @@ jobs:
           script: |
             set -e
 
-            echo "🚀 Starting deployment..."
+            echo "Starting deployment..."
 
             cd /var/www/my-api
 
+            echo "Pulling latest code..."
             git fetch origin
             git reset --hard origin/main
 
+            echo "Installing production dependencies..."
             npm ci
 
+            echo "Building application..."
             npm run build
 
+            echo "Reloading PM2..."
             pm2 reload my-api --update-env
 
-            echo "✅ Deployment completed successfully."
+            echo "Deployment completed successfully."
