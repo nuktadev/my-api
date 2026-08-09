@@ -33,64 +33,69 @@ jobs:
   # CD
   # ==========================
   deploy:
-    - name: Deploy to server
-  uses: appleboy/ssh-action@v1.2.2
-  with:
-    host: ${{ secrets.HOST }}
-    username: ${{ secrets.USERNAME }}
-    key: ${{ secrets.SSH_KEY }}
-    port: ${{ secrets.PORT }}
+    name: Deploy to DigitalOcean
+    needs: ci
+    runs-on: ubuntu-latest
 
-    script: |
-      set -e
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
 
-      cd /var/www/my-api
+          script: |
+            set -e
 
-      git fetch origin
+            cd /var/www/my-api
 
-      PREVIOUS_COMMIT=$(git rev-parse HEAD)
+            git fetch origin
 
-      echo "Previous commit: $PREVIOUS_COMMIT"
+            PREVIOUS_COMMIT=$(git rev-parse HEAD)
 
-      git reset --hard origin/main
+            echo "Previous commit: $PREVIOUS_COMMIT"
 
-      if npm ci && npm run build; then
-        echo "Build successful."
-      else
-        echo "Build failed. Rolling back..."
+            git reset --hard origin/main
 
-        git reset --hard "$PREVIOUS_COMMIT"
+            if npm ci && npm run build; then
+              echo "Build successful."
+            else
+              echo "Build failed. Rolling back..."
 
-        npm ci
-        npm run build
+              git reset --hard "$PREVIOUS_COMMIT"
 
-        pm2 reload my-api --update-env
+              npm ci
+              npm run build
 
-        echo "Rollback completed."
-        exit 1
-      fi
+              pm2 reload my-api --update-env
 
-      pm2 reload my-api --update-env
+              echo "Rollback completed."
+              exit 1
+            fi
 
-      echo "Waiting for application..."
+            pm2 reload my-api --update-env
 
-      for i in {1..10}; do
-        if curl -fsS http://localhost:3000/health > /dev/null; then
-          echo "Health check passed."
-          exit 0
-        fi
+            echo "Waiting for application..."
 
-        echo "Health check failed. Retrying..."
-        sleep 3
-      done
+            for i in {1..10}; do
+              if curl -fsS http://localhost:3000/health > /dev/null; then
+                echo "Health check passed."
+                exit 0
+              fi
 
-      echo "Health check failed. Rolling back..."
+              echo "Health check failed. Retrying..."
+              sleep 3
+            done
 
-      git reset --hard "$PREVIOUS_COMMIT"
+            echo "Health check failed. Rolling back..."
 
-      npm ci
-      npm run build
-      pm2 reload my-api --update-env
+            git reset --hard "$PREVIOUS_COMMIT"
 
-      echo "Rollback completed."
-      exit 1
+            npm ci
+            npm run build
+            pm2 reload my-api --update-env
+
+            echo "Rollback completed."
+            exit 1
